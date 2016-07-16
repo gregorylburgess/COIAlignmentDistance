@@ -114,7 +114,7 @@ def pairwiseSubSample (aligns, distFn):
 			dists.append( computeDist([str(aligns[i]), str(aligns[j])], distFn))
 	return dists
 
-# Computes the min, max, avg % genetic variance amongst members of a given OTU.  
+# Computes the min, max, avg % genetic variance amongst members of a given OTU.  Primary function.
 # 	t		{{}{}} A tree from loadTree()
 # 	s		{{}{}} A tree form loadSequences()
 # 	refDB 		{} A SeqIO fast index.  Result of calling indexFasta()
@@ -169,6 +169,8 @@ def computeOtuDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, subS
 #	-bold_coi_11_05_2015.fasta
 
 #Load Tree and Sequences
+
+'''
 print("Loading Tree...")
 t=loadTree("data/Unique_taxonomy.lines")
 print("Loading Sequences...")
@@ -183,5 +185,7 @@ upToLvl=8
 
 print("Running query for " + tax + " (Lvl=" + str(upToLvl))
 
+'''
 print( computeOtuDistance(t, s, tax, upToLvl, refDB, distFn, 10,3))
+'''
 
