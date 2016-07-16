@@ -7,6 +7,11 @@ import random
 import re
 import subprocess
 
+# TODO
+# Check that the subsample is <= the number of sequences in that node
+
+
+
 # Parses a clustalW .aln file and returns the SeqIO iterator.
 # 	filePath  	"" Filepath to .aln file.
 #
@@ -98,7 +103,8 @@ def computeDist_outterGapConserved (aligns):
 #	
 # 	return		The distance as a % between sequences in an alignFile
 def computeDist (aligns, distFn):
-	distFns = {"OUTTER_GAP_CONSERVED":computeDist_outterGapConserved}
+	distFns = {"OUTTER_GAP_CONSERVED": computeDist_outterGapConserved}
+	
 	if distFn in distFns.keys():
 		return distFns[distFn](aligns)
 	else:
@@ -106,12 +112,11 @@ def computeDist (aligns, distFn):
 
 # Does pairwise subsampling on a list of sequences.  Returns a list of sample diversity (as % difference) rates.
 #	aligns:		[] The sequences to pairwise align.
-# 	
-def pairwiseSubSample (aligns, distFn):
-	sampleSize = len(aligns)
+def pairwiseSubSample(alignedSeqs, distFn):
+	sampleSize = len(alignedSeqs)
 	dists = [] 
 	for i,j in combinations(range(sampleSize),2):
-			dists.append( computeDist([str(aligns[i]), str(aligns[j])], distFn))
+			dists.append( computeDist([str(alignedSeqs[i]), str(alignedSeqs[j])], distFn))
 	return dists
 
 # Computes the min, max, avg % genetic variance amongst members of a given OTU.  Primary function.
@@ -144,15 +149,15 @@ def computeOtuDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, subS
 
 	# subsample for pairwise alignments
 	if subSampleSize > 0:
-		aligns = randomSubSample (aligns, subSampleSize)
+		alignsSubSample = randomSubSample (aligns, subSampleSize)
 
-	cleanedAligns = [str(x.seq) for x in aligns]
+	cleanedAligns = [str(x.seq) for x in alignsSubSample]
 	#=====================works ok up to here==============
 	# at this point cleanedAligns is a cleaned list of strings representing the sequences that are ready to be pairwise aligned
 
 	#compute distances
 	print("Computing distance.")
-	dists = pairwiseSubSample(aligns, distFn)
+	dists = pairwiseSubSample(alignsSubSample, distFn)
 	print(dists)
 	max_value = max(dists)
 	min_value = min(dists)
@@ -170,22 +175,21 @@ def computeOtuDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, subS
 
 #Load Tree and Sequences
 
-'''
-print("Loading Tree...")
-t=loadTree("data/Unique_taxonomy.lines")
-print("Loading Sequences...")
-s=loadSequences("data/seq_lin.mapping")
-print("Loading BOLD...")
-dbFile="data/bold_coi_11_05_2015.fasta"
-refDB = indexFasta(dbFile)
-distFn="OUTTER_GAP_CONSERVED"
 
-tax="Animalia;Arthropoda;Remipedia;Nectiopoda"
-upToLvl=8
+# print("Loading Tree...")
+# t=loadTree("data/Unique_taxonomy.lines")
+# print("Loading Sequences...")
+# s=loadSequences("data/seq_lin.mapping")
+# print("Loading BOLD...")
+# dbFile="data/bold_coi_11_05_2015.fasta"
 
-print("Running query for " + tax + " (Lvl=" + str(upToLvl))
+# refDB = indexFasta(dbFile)
+# distFn="OUTTER_GAP_CONSERVED"
 
-'''
-print( computeOtuDistance(t, s, tax, upToLvl, refDB, distFn, 10,3))
-'''
+# tax="Animalia;Arthropoda;Remipedia;Nectiopoda"
+# upToLvl=8
+
+# print "Running query for %s Lvl=%s"  % ( tax, upToLvl)
+
+# print  computeOtuDistance(t, s, tax, upToLvl, refDB, distFn, 10, 3)
 
