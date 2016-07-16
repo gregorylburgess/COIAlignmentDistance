@@ -2,6 +2,7 @@ from Bio import SeqIO, AlignIO
 from Bio.Align.Applications import ClustalwCommandline
 from generateTree import loadTree, loadSequences, getSequencesOf
 from itertools import chain, izip, combinations
+from statistics import mean, stdev
 import numpy as np
 import os
 import random
@@ -149,21 +150,21 @@ def computePairwiseDistStats(alignedSeqs, distFn):
 	'''
 	sampleSize = len(alignedSeqs)
 	distMatrix = np.zeros((sampleSize, sampleSize))
-
+	valList = []
 	for i,j in combinations(range(sampleSize), 2):
 		distMatrix[i,j] = computeDist([alignedSeqs[i],alignedSeqs[j]],
 						distFn)
+		valList.append(distMatrix[i,j])
 
 	print distMatrix
-	myAvg = np.average(distMatrix)
-	myStd = np.std(distMatrix)
-	myMax = distMatrix[np.unravel_index(distMatrix.argmax(), 
-						distMatrix.shape)]
-	# fill diagonal with max to ignore z
-	np.fill_diagonal(distMatrix, distMatrix.max())
-	myMin = distMatrix[np.unravel_index(distMatrix.argmin(), 
-						distMatrix.shape)]
-	return (myMin, myMax, myAvg, myStd)
+	myMin = min(valList)
+	myMax = max(valList)
+	myAvg = mean(valList)
+	myStd = stdev(valList)
+	sol = (myMin, myMax, myAvg, myStd)
+	print 'min: %f\nmax: %f\navg: %f\nstd: %f' % sol
+	return sol
+
 
 def computeOtuDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, \
 				pairwiseSampleSize=0):
