@@ -39,7 +39,7 @@ def searchFastaByID(fastaFilePath, targetIDs):
 			pass
 	return records
 
-
+ 
 
 # fastaFile: ""	The fastafile to align.
 # takes in fasta file, does alignment, and outputs fastFile.aln
