@@ -2,22 +2,27 @@ from Bio import SeqIO, AlignIO
 from Bio.Align.Applications import ClustalwCommandline
 from generateTree import loadTree, loadSequences, getSequencesOf
 from itertools import chain, izip, combinations
-from statistics import mean, stdev
+
+# NOTE TO GREG: this only exists in version 3.4
+# preferably work with numpy
+# from statistics import mean, stdev
+
+
 import numpy as np
 import os
 import random
 import re
 import subprocess
 
-
-def parseAln (filePath):
+# TODO: 
+def parseAln (filePath, alnType="clustal"):
 	'''Parses a clustalW .aln file and returns the SeqIO iterator.
 
 	 	filePath  	"" Filepath to .aln file.
 
 	 	return	  	"" A SeqIO iterator.
 	'''
-	records = SeqIO.parse(open(filePath, "rU"), "clustal")
+	records = SeqIO.parse(open(filePath, "rU"), alnType)
 	return records
 
 
@@ -35,11 +40,11 @@ def indexFasta (filePath, nameFn=lambda x : x.split('|')[0]):
 def searchFastaByID (refDB, targetIDs):
 	'''Pulls a list of targetsIDs from a SeqIO index dictionary. 
 
-	 	refDB:  	{SeqIO} SeqIO index object result of 
+	 	refDB:  	{seqId: SeqRecord, } SeqIO index object result of 
 					indexFasta().
-	 	targetIDs: 	[""] list of IDs to pull.
+	 	targetIDs: 	["", ] list of IDs to pull.
 
-	 	return	 	[SeqIO.records] record.id and record.seq.
+	 	return	 	[SeqIO.records, ] record.id and record.seq.
 	'''
 	records = []
 	for record in targetIDs:
@@ -120,7 +125,7 @@ def computeDist_outterGapConserved(aligns):
 	return miss / (miss + float(succ))
 
 
-def computeDist (aligns, distFn):
+def computeDist(aligns, distFn):
 	'''Computes the distance between sequences in a .aln file, using the 
 		distFn specified.
 
@@ -159,17 +164,17 @@ def computePairwiseDistStats(alignedSeqs, distFn):
 	print distMatrix
 	myMin = min(valList)
 	myMax = max(valList)
-	myAvg = mean(valList)
-	myStd = stdev(valList)
+	myAvg = np.mean(valList)
+	myStd = np.std(valList)
 	sol = (myMin, myMax, myAvg, myStd)
 	print 'min: %f\nmax: %f\navg: %f\nstd: %f' % sol
 	return sol
 
 
-def computeOtuDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, \
+def computeAlnDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, \
 				pairwiseSampleSize=0):
 	'''Computes the min, max, avg % genetic variance amongst members of a \
-		given OTU.  Primary function.
+		given sequences.  Primary function.
 
 	 	t		{{}{}} A tree from loadTree()
 	 	s		{{}{}} A tree form loadSequences()
@@ -205,7 +210,7 @@ def computeOtuDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, \
 				matches is smaller than maxPoolSize.  \
 				Ignoring maxPoolSize."
 	# publish matching seqs
-	print "Writing results to %s", hitsFastaFilePath
+	print "Writing results to %s " % hitsFastaFilePath
 	SeqIO.write(descendants, open(hitsFastaFilePath, 'w'), "fasta")
 
 	# align seqs
@@ -238,20 +243,19 @@ def computeOtuDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, \
  #	-bold_coi_11_05_2015.fasta
 '''
 
-print "Loading Tree..."
-t=loadTree("data/Unique_taxonomy.lines")
-print "Loading Sequences..."
-s=loadSequences("data/seq_lin.mapping")
-print "Loading BOLD..."
-dbFile="data/bold_coi_11_05_2015.fasta"
+# print "Loading Tree..."
+# t=loadTree("data/Unique_taxonomy.lines")
+# print "Loading Sequences..."
+# s=loadSequences("data/seq_lin.mapping")
+# print "Loading BOLD..."
+# dbFile="data/bold_coi_11_05_2015.fasta"
 
-refDB = indexFasta(dbFile)
-distFn="OUTTER_GAP_CONSERVED"
+# refDB = indexFasta(dbFile)
+# distFn="OUTTER_GAP_CONSERVED"
 
-tax="Animalia;Arthropoda;Remipedia;Nectiopoda"
-upToLvl=8
+# tax="Animalia;Arthropoda;Remipedia;Nectiopoda"
+# upToLvl=8
 
-print "Running query for %s Lvl=%s"  % ( tax, upToLvl)
+# print "Running query for %s Lvl=%s"  % ( tax, upToLvl)
 
-print  computeOtuDistance(t, s, tax, upToLvl, refDB, distFn, 15, 10)
-
+# print  computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, 15, 10)
