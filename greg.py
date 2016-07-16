@@ -2,41 +2,44 @@ from Bio import SeqIO, AlignIO
 from Bio.Align.Applications import ClustalwCommandline
 from generateTree import loadTree, loadSequences, getSequencesOf
 from itertools import chain, izip, combinations
+import numpy as np
 import os
 import random
 import re
 import subprocess
 
-# TODO
-# Check that the subsample is <= the number of sequences in that node
 
-
-
-# Parses a clustalW .aln file and returns the SeqIO iterator.
-# 	filePath  	"" Filepath to .aln file.
-#
-# 	return	  	"" A SeqIO iterator.
 def parseAln (filePath):
-	handle = open(filePath, "rU")
-	records = SeqIO.parse(handle, "clustal")
+	'''Parses a clustalW .aln file and returns the SeqIO iterator.
+
+	 	filePath  	"" Filepath to .aln file.
+
+	 	return	  	"" A SeqIO iterator.
+	'''
+	records = SeqIO.parse(open(filePath, "rU"), "clustal")
 	return records
 
 
-# Indexes a fasta file by id, returning a SeqIO index dictionary.
-# 	filePath: 	"" Filepath to fasta file.
-#
-# 	return 		{SeqIO} A SeqIO index object (non iterable).
 def indexFasta (filePath, nameFn=lambda x : x.split('|')[0]):
+	'''Indexes a fasta file by id, returning a SeqIO index dictionary.
+
+	 	filePath: 	"" Filepath to fasta file.
+
+	 	return 		{SeqIO} A SeqIO index object (non iterable).
+	'''
 	records = SeqIO.index(filePath, "fasta", key_function=nameFn)
 	return records
 
 
-# Pulls a list of targetsIDs from a SeqIO index dictionary. 
-# 	refDB:  	 {SeqIO} SeqIO index object result of indexFasta().
-# 	targetIDs: 	 [""] list of IDs to pull.
-#
-# 	return	 	 [SeqIO.records] record.id and record.seq.
 def searchFastaByID (refDB, targetIDs):
+	'''Pulls a list of targetsIDs from a SeqIO index dictionary. 
+
+	 	refDB:  	{SeqIO} SeqIO index object result of 
+					indexFasta().
+	 	targetIDs: 	[""] list of IDs to pull.
+
+	 	return	 	[SeqIO.records] record.id and record.seq.
+	'''
 	records = []
 	for record in targetIDs:
 		# Find the sequence if it exists
@@ -48,39 +51,58 @@ def searchFastaByID (refDB, targetIDs):
 	return records
 
 
-# Randomly subsamples a list without replacement
-#	n:	# The max number of samples to take.
-#	pool:	[] The pool to take from
-#
-#	return		A list of up to n items from pool.
+
 def randomSubSample(pool, n):
+	'''Randomly subsamples a list without replacement.
+
+	 	n:	# The max number of samples to take.
+	 	pool:	[] The pool to take from.
+	 
+	 	return		A list of up to n items from pool.
+	'''
 	return random.sample(pool, n)
 
 
-# Takes in fasta file, cals clustalW for multi-sequence alignmnet, and outputs "{fastFile}.aln"
-# 	fastaFile: 	"" The Filepath to the fastafile to align.
-#
-# 	return 		"" The Filepath of the resulting alignment file (clustW's .aln format)
-def clustalAlign (fastaFile):
-	print("Running clustalW...")
-	outFileName = fastaFile + ".aln"
-	subprocess.call(["clustalw", fastaFile, "-outfile=" + outFileName ,"-quiet"])
-	return outFileName
 
-# Replaces the internal gaps '-' of a string by ':'
-# 	line:  	"" A sequence to edit
-#
-# 	return 	"" The string with inner gaps replaced by ':'
-def replaceInnerGap (line):
+def clustalAlign(fastaFile):
+	'''Takes in fasta file, cals clustalW for multi-sequence alignmnet, 
+		and outputs "{fastFile}.aln".
+
+	 	fastaFile: 	"" The Filepath to the fastafile to align.
+	 
+	 	return 		"" The Filepath of the resulting alignment 
+					file (clustW's .aln format).
+	'''
+	with open(os.devnull, 'w') as fnull:
+		clustalWCmd = ['clustalw', '-ALIGN','-INFILE=%s' % fastaFile,
+				'-OUTFILE=%s.aln' % fastaFile,
+				'-OUTORDER=INPUT']
+		subprocess.call(clustalWCmd, stderr=fnull, stdout=fnull)
+	return "%s.aln" % fastaFile
+
+
+def replaceInnerGap(line):
+	'''Replaces the internal gaps '-' of a string by ':'.
+
+	 	line:	"" A sequence to edit.
+	 
+	 	return	"" The string with inner gaps replaced by ':'.
+	'''
 	frstA = re.search(r'^-*[^-]', line).end() - 1
 	lastA = re.search(r'[^-]-*$', line).start()
-	return line[ :frstA] + (line[frstA:lastA].replace('-', ':')) + line[lastA: ]
+	return line[ :frstA] + (line[frstA:lastA].replace('-', ':')) \
+		+ line[lastA: ]
 
-# Computes the distance between the sequences in a .aln file, counting padding gaps as wildcard matches.
-# 	aligns	 	[""] List of seqs to align"" File path to the .aln file from clustalw
-#
-# 	returns 	The mismatch % between aligned sequences
-def computeDist_outterGapConserved (aligns):
+
+def computeDist_outterGapConserved(aligns):
+	'''Computes the distance between the sequences in a .aln file,
+		counting padding gaps as wildcard matches.
+
+	 	aligns	 	[""] List of seqs to align"" File path to the 
+					.aln file from clustalw.
+	 
+	 	returns 	The mismatch % between aligned sequences.
+	'''
 	miss = 0
 	succ = 0
 	for i in range(len(aligns)):
@@ -89,107 +111,146 @@ def computeDist_outterGapConserved (aligns):
 	for col in izip(*aligns):
 		colSet = set(col)
 		setSize = len(colSet)
-		if ':' in colSet or (setSize > 2) or (setSize == 2 and not '-' in colSet):
+		if ':' in colSet or (setSize > 2) or (setSize == 2 and not '-'\
+			 in colSet):
 			miss = miss + 1
 		else:
 			succ = succ + 1
-	#print ("Miss=" + str(miss))
-	#print ("Hit="+str(succ))
 	return miss / (miss + float(succ))
 
-# Computes the distance between sequences in a .aln file, using the distFn specified.
-# 	algins: 	[] List of seqs to align"" File path to the .aln file from clustalw
-# 	distFn: 	"" Uppercase ID for the dist function to use
-#	
-# 	return		The distance as a % between sequences in an alignFile
+
 def computeDist (aligns, distFn):
+	'''Computes the distance between sequences in a .aln file, using the 
+		distFn specified.
+
+	 	aligns: 	[] List of seqs to align"" File path to the 
+					.aln file from clustalw
+	 	distFn: 	"" Uppercase ID for the dist function to use
+	 	
+	 	return		The distance as a % between sequences in an 
+					alignFile
+	'''
 	distFns = {"OUTTER_GAP_CONSERVED": computeDist_outterGapConserved}
 	
-	if distFn in distFns.keys():
+	if distFns.has_key(distFn):
 		return distFns[distFn](aligns)
 	else:
-		raise NameError("Error: Invalid grading Fn.  Valid options are:" + distFns.keys())
+		raise NameError("Error: Invalid grading Fn.")
 
-# Does pairwise subsampling on a list of sequences.  Returns a list of sample diversity (as % difference) rates.
-#	aligns:		[] The sequences to pairwise align.
-def pairwiseSubSample(alignedSeqs, distFn):
+
+def computePairwiseDistStats(alignedSeqs, distFn):
+	'''Does pairwise subsampling on a list of sequences.  Prints the 
+		distnace matrix and computes summary stats. 
+
+	 	alignedSeqs:	[] The sequences to compare.
+
+		return		(,) A tuple of (min,max,avg,std) distances
+					summarizing the table.
+	'''
 	sampleSize = len(alignedSeqs)
-	dists = [] 
-	for i,j in combinations(range(sampleSize),2):
-			dists.append( computeDist([str(alignedSeqs[i]), str(alignedSeqs[j])], distFn))
-	return dists
+	distMatrix = np.zeros((sampleSize, sampleSize))
 
-# Computes the min, max, avg % genetic variance amongst members of a given OTU.  Primary function.
-# 	t		{{}{}} A tree from loadTree()
-# 	s		{{}{}} A tree form loadSequences()
-# 	refDB 		{} A SeqIO fast index.  Result of calling indexFasta()
-# 	tax		"a;b;c;d" A semicolon-delimited taxonomy string
-# 	upToLvl		# A digit between 1 and 8 indicating depth of tax
-# 	distFn		"" Uppercase ID for the dist function to use
-#	maxPoolSize	# A number indicating the maxmimum size of a the taxa to multi-seq align.
-#			Default = no sub-sampling.
-#	pairwiseSampleSize	# A number indicating the maxmimum size of a subsample from the tax pool to pariwise-seq align.
-#			Default = no sub-sampling.
-# 	returns		#.## Percentage diversity between sequences at a given taxanomic level
-def computeOtuDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, subSampleSize=0):
-	hitsFastaFilePath = "data/" + tax + ".fasta"
-	child_seqs = chain.from_iterable (getSequencesOf (t, s, tax, upToLvl))
+	for i,j in combinations(range(sampleSize), 2):
+		distMatrix[i,j] = computeDist([alignedSeqs[i],alignedSeqs[j]],
+						distFn)
+
+	print distMatrix
+	myAvg = np.average(distMatrix)
+	myStd = np.std(distMatrix)
+	myMax = distMatrix[np.unravel_index(distMatrix.argmax(), 
+						distMatrix.shape)]
+	# fill diagonal with max to ignore z
+	np.fill_diagonal(distMatrix, distMatrix.max())
+	myMin = distMatrix[np.unravel_index(distMatrix.argmin(), 
+						distMatrix.shape)]
+	return (myMin, myMax, myAvg, myStd)
+
+def computeOtuDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, \
+				pairwiseSampleSize=0):
+	'''Computes the min, max, avg % genetic variance amongst members of a \
+		given OTU.  Primary function.
+
+	 	t		{{}{}} A tree from loadTree()
+	 	s		{{}{}} A tree form loadSequences()
+	 	refDB 		{} A SeqIO fast index.  Result of calling 
+					indexFasta()
+	 	tax		"a;b;c" A semicolon-delimited taxonomy string
+	 	upToLvl		# A digit between 1 and 8 indicating depth of 
+					tax
+	 	distFn		"" Uppercase ID for the dist function to use
+	 	maxPoolSize	# A number indicating the maxmimum size of a
+					 the taxa to multi-seq align.
+	 			Default = no sub-sampling.
+	 	pairwiseSampleSize	# A number indicating the maxmimum 
+						size of a subsample from the 
+						tax pool to pariwise-seq align.
+	 			Default = no sub-sampling.
+	 	returns		#.## Percentage diversity between sequences 
+					at a given taxanomic level
+	'''
+	if pairwiseSampleSize > maxPoolSize:
+		raise Exception("subSampleSize must be smaller than\
+					 maxPoolSize.")
+	hitsFastaFilePath = "data/%s.fasta" % tax
+	child_seqs = chain.from_iterable(getSequencesOf(t, s, tax, upToLvl))
 	print("Fetching sequences from database...")
-	children = list(searchFastaByID (refDB, child_seqs))
+	descendants = list(searchFastaByID(refDB, child_seqs))
 	if maxPoolSize > 0:
-		children = randomSubSample (children, maxPoolSize)
-
+		if maxPoolSize < len(descendants):
+			descendants = randomSubSample(descendants, 
+							maxPoolSize)
+		else:
+			print "WARNING: The number of available taxonomic\
+				matches is smaller than maxPoolSize.  \
+				Ignoring maxPoolSize."
 	# publish matching seqs
-	print("Writing results to " + hitsFastaFilePath)
-	SeqIO.write(children, hitsFastaFilePath, "fasta")
+	print "Writing results to %s", hitsFastaFilePath
+	SeqIO.write(descendants, open(hitsFastaFilePath, 'w'), "fasta")
 
 	# align seqs
 	alignFile = clustalAlign(hitsFastaFilePath)
 	aligns = [x for x in parseAln(alignFile)]
 
 	# subsample for pairwise alignments
-	if subSampleSize > 0:
-		alignsSubSample = randomSubSample (aligns, subSampleSize)
+	if pairwiseSampleSize > 0:
+		if pairwiseSampleSize <= len(aligns):
+			subSampledAligns = randomSubSample(aligns,
+							pairwiseSampleSize)
+		else:
+			print "WARNING: The number of available taxonomic \
+				matches is smaller than subSampleSize.  \
+				Ignoring pairwiseSampleSize."
 
-	cleanedAligns = [str(x.seq) for x in alignsSubSample]
-	#=====================works ok up to here==============
-	# at this point cleanedAligns is a cleaned list of strings representing the sequences that are ready to be pairwise aligned
+	cleanedAligns = [str(x.seq) for x in subSampledAligns]
+	
+	print "Computing distance."
+	return computePairwiseDistStats(cleanedAligns, distFn)
 
-	#compute distances
-	print("Computing distance.")
-	dists = pairwiseSubSample(alignsSubSample, distFn)
-	print(dists)
-	max_value = max(dists)
-	min_value = min(dists)
-	avg_value = sum(dists)/len(dists)
-	print(min_value, avg_value, max_value)
+'''===Notes===
+ Directory should look like
+ #-/
+ #-greg.py
+ #-generateTree.py
+ #-data/
+ #	-Unique_taxonomy.lines
+ #	-seq_lin.mapping
+ #	-bold_coi_11_05_2015.fasta
+'''
 
-#directory should look like
-#-/
-#-greg.py
-#-generateTree.py
-#-data/
-#	-Unique_taxonomy.lines
-#	-seq_lin.mapping
-#	-bold_coi_11_05_2015.fasta
+print "Loading Tree..."
+t=loadTree("data/Unique_taxonomy.lines")
+print "Loading Sequences..."
+s=loadSequences("data/seq_lin.mapping")
+print "Loading BOLD..."
+dbFile="data/bold_coi_11_05_2015.fasta"
 
-#Load Tree and Sequences
+refDB = indexFasta(dbFile)
+distFn="OUTTER_GAP_CONSERVED"
 
+tax="Animalia;Arthropoda;Remipedia;Nectiopoda"
+upToLvl=8
 
-# print("Loading Tree...")
-# t=loadTree("data/Unique_taxonomy.lines")
-# print("Loading Sequences...")
-# s=loadSequences("data/seq_lin.mapping")
-# print("Loading BOLD...")
-# dbFile="data/bold_coi_11_05_2015.fasta"
+print "Running query for %s Lvl=%s"  % ( tax, upToLvl)
 
-# refDB = indexFasta(dbFile)
-# distFn="OUTTER_GAP_CONSERVED"
-
-# tax="Animalia;Arthropoda;Remipedia;Nectiopoda"
-# upToLvl=8
-
-# print "Running query for %s Lvl=%s"  % ( tax, upToLvl)
-
-# print  computeOtuDistance(t, s, tax, upToLvl, refDB, distFn, 10, 3)
+print  computeOtuDistance(t, s, tax, upToLvl, refDB, distFn, 15, 10)
 
