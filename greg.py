@@ -3,9 +3,11 @@ from Bio.Align.Applications import ClustalwCommandline
 from generateTree import loadTree, loadSequences, getSequencesOf
 from itertools import chain, izip, combinations
 
-# NOTE TO GREG: this only exists in version 3.4
-# preferably work with numpy
+# TOD: this only exists in version 3.4
+# preferably work with numpy to remove any dependency on python 3
 # from statistics import mean, stdev
+
+# TODO: Add a DEBUG boolean and only use print when DEBUG is set to true.
 
 
 import numpy as np
@@ -167,12 +169,13 @@ def computePairwiseDistStats(alignedSeqs, distFn):
 	myAvg = np.mean(valList)
 	myStd = np.std(valList)
 	sol = (myMin, myMax, myAvg, myStd)
+	# TODO: use DEBUG to print
 	print 'min: %f\nmax: %f\navg: %f\nstd: %f' % sol
 	return sol
 
 
-def computeAlnDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, \
-				pairwiseSampleSize=0):
+def computeAlnDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize, \
+				pairwiseSampleSize):
 	'''Computes the min, max, avg % genetic variance amongst members of a \
 		given sequences.  Primary function.
 
@@ -194,11 +197,17 @@ def computeAlnDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, \
 	 	returns		#.## Percentage diversity between sequences 
 					at a given taxanomic level
 	'''
+	# TODO: I don't think this conditions is needed.
 	if pairwiseSampleSize > maxPoolSize:
 		raise Exception("subSampleSize must be smaller than\
 					 maxPoolSize.")
+
+	
+	# TODO: create a temp directory specifically for results to avoid polluting the
+	# data directory
 	hitsFastaFilePath = "data/%s.fasta" % tax
 	child_seqs = chain.from_iterable(getSequencesOf(t, s, tax, upToLvl))
+	# TODO: use DEBUG to print
 	print("Fetching sequences from database...")
 	descendants = list(searchFastaByID(refDB, child_seqs))
 	if maxPoolSize > 0:
@@ -209,7 +218,11 @@ def computeAlnDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, \
 			print "WARNING: The number of available taxonomic\
 				matches is smaller than maxPoolSize.  \
 				Ignoring maxPoolSize."
+	else:
+		# TODO: should stop otherwise
+		pass
 	# publish matching seqs
+	# TODO: use DEBUG to print
 	print "Writing results to %s " % hitsFastaFilePath
 	SeqIO.write(descendants, open(hitsFastaFilePath, 'w'), "fasta")
 
@@ -226,9 +239,11 @@ def computeAlnDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize = 0, \
 			print "WARNING: The number of available taxonomic \
 				matches is smaller than subSampleSize.  \
 				Ignoring pairwiseSampleSize."
+	else:
+		# TODO: Same as above. Nothign to compute if this pairwiseSampleSize <= 0
 
 	cleanedAligns = [str(x.seq) for x in subSampledAligns]
-	
+	# TODO: use DEBUG to print
 	print "Computing distance."
 	return computePairwiseDistStats(cleanedAligns, distFn)
 
