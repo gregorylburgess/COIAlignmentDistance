@@ -3,20 +3,25 @@ from Bio.Align.Applications import ClustalwCommandline
 from generateTree import loadTree, loadSequences, getSequencesOf
 from itertools import chain, izip, combinations
 
-# TOD: this only exists in version 3.4
-# preferably work with numpy to remove any dependency on python 3
-# from statistics import mean, stdev
-
-# TODO: Add a DEBUG boolean and only use print when DEBUG is set to true.
-
-
+import logging
 import numpy as np
 import os
 import random
 import re
 import subprocess
+import sys
 
-# TODO: 
+def ensureDirExists(dirPath):
+	'''Ensures that a relative directory specified by dirPath exists,\
+		by creating it if necessary.
+
+		dirPath "" Relative path to a directory to ensure.
+	'''
+	# check if temp directorty exists, and create it if not
+	tempDir = "temp"
+	if not os.path.isdir(tempDir):
+		os.mkdir(tempDir)
+
 def parseAln (filePath, alnType="clustal"):
 	'''Parses a clustalW .aln file and returns the SeqIO iterator.
 
@@ -42,8 +47,8 @@ def indexFasta (filePath, nameFn=lambda x : x.split('|')[0]):
 def searchFastaByID (refDB, targetIDs):
 	'''Pulls a list of targetsIDs from a SeqIO index dictionary. 
 
-	 	refDB:  	{seqId: SeqRecord, } SeqIO index object result of 
-					indexFasta().
+	 	refDB:  	{seqId: SeqRecord, } SeqIO index object result  
+					of indexFasta().
 	 	targetIDs: 	["", ] list of IDs to pull.
 
 	 	return	 	[SeqIO.records, ] record.id and record.seq.
@@ -81,6 +86,7 @@ def clustalAlign(fastaFile):
 	 	return 		"" The Filepath of the resulting alignment 
 					file (clustW's .aln format).
 	'''
+
 	with open(os.devnull, 'w') as fnull:
 		clustalWCmd = ['clustalw', '-ALIGN','-INFILE=%s' % fastaFile,
 				'-OUTFILE=%s.aln' % fastaFile,
@@ -106,8 +112,7 @@ def computeDist_outterGapConserved(aligns):
 	'''Computes the distance between the sequences in a .aln file,
 		counting padding gaps as wildcard matches.
 
-	 	aligns	 	[""] List of seqs to align"" File path to the 
-					.aln file from clustalw.
+	 	aligns	 	[""] List of seqs to align.
 	 
 	 	returns 	The mismatch % between aligned sequences.
 	'''
@@ -131,8 +136,7 @@ def computeDist(aligns, distFn):
 	'''Computes the distance between sequences in a .aln file, using the 
 		distFn specified.
 
-	 	aligns: 	[] List of seqs to align"" File path to the 
-					.aln file from clustalw
+	 	aligns: 	[] List of seqs to align""
 	 	distFn: 	"" Uppercase ID for the dist function to use
 	 	
 	 	return		The distance as a % between sequences in an 
@@ -163,19 +167,25 @@ def computePairwiseDistStats(alignedSeqs, distFn):
 						distFn)
 		valList.append(distMatrix[i,j])
 
-	print distMatrix
+	distMatrix
 	myMin = min(valList)
 	myMax = max(valList)
 	myAvg = np.mean(valList)
 	myStd = np.std(valList)
-	sol = (myMin, myMax, myAvg, myStd)
-	# TODO: use DEBUG to print
-	print 'min: %f\nmax: %f\navg: %f\nstd: %f' % sol
+	sol = {"min": myMin, "max":myMax, "avg":myAvg, "std":myStd}
+	
+	logging.debug("Pairwise Data:\n")
+	for key in sol.keys():
+		logging.debug("%s: %f\n" % (key, sol[key]))
 	return sol
 
 
-def computeAlnDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize, \
-				pairwiseSampleSize):
+def emptySampleError(varName):
+	logging.error("%s must be greater than or equal to 0." % varName)
+	sys.exit()
+
+def computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, outDir="tmp", 
+				maxPoolSize=100, pairwiseSampleSize=25):
 	'''Computes the min, max, avg % genetic variance amongst members of a \
 		given sequences.  Primary function.
 
@@ -187,43 +197,42 @@ def computeAlnDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize, \
 	 	upToLvl		# A digit between 1 and 8 indicating depth of 
 					tax
 	 	distFn		"" Uppercase ID for the dist function to use
-	 	maxPoolSize	# A number indicating the maxmimum size of a
+		outDir		"" Name of the local directory to use for file
+					 output.	 	
+		maxPoolSize	# A number indicating the maxmimum size of a
 					 the taxa to multi-seq align.
-	 			Default = no sub-sampling.
 	 	pairwiseSampleSize	# A number indicating the maxmimum 
 						size of a subsample from the 
 						tax pool to pariwise-seq align.
-	 			Default = no sub-sampling.
+
 	 	returns		#.## Percentage diversity between sequences 
 					at a given taxanomic level
 	'''
-	# TODO: I don't think this conditions is needed.
-	if pairwiseSampleSize > maxPoolSize:
-		raise Exception("subSampleSize must be smaller than\
-					 maxPoolSize.")
+	# The temp directory to write to
+	tempDir = "temp"
+	ensureDirExists(tempDir)
 
-	
-	# TODO: create a temp directory specifically for results to avoid polluting the
-	# data directory
-	hitsFastaFilePath = "data/%s.fasta" % tax
+	# A safe file name delimiter to use as a replacement for unsafe delims.
+	fileNameDelim = "_"
+
+	hitsFastaFilePath = "%s/%s.fasta" % (tempDir, 
+						tax.replace(';',fileNameDelim))
 	child_seqs = chain.from_iterable(getSequencesOf(t, s, tax, upToLvl))
-	# TODO: use DEBUG to print
-	print("Fetching sequences from database...")
+	logging.info("Fetching sequences from database...")
 	descendants = list(searchFastaByID(refDB, child_seqs))
 	if maxPoolSize > 0:
 		if maxPoolSize < len(descendants):
 			descendants = randomSubSample(descendants, 
 							maxPoolSize)
 		else:
-			print "WARNING: The number of available taxonomic\
+			logging.warning(": The number of available taxonomic\
 				matches is smaller than maxPoolSize.  \
-				Ignoring maxPoolSize."
+				Ignoring maxPoolSize.")
 	else:
-		# TODO: should stop otherwise
-		pass
+		emptySampleError("maxPoolSize")
+		sys.exit()
 	# publish matching seqs
-	# TODO: use DEBUG to print
-	print "Writing results to %s " % hitsFastaFilePath
+	logging.info("Writing results to %s ..." % hitsFastaFilePath)
 	SeqIO.write(descendants, open(hitsFastaFilePath, 'w'), "fasta")
 
 	# align seqs
@@ -236,16 +245,26 @@ def computeAlnDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize, \
 			subSampledAligns = randomSubSample(aligns,
 							pairwiseSampleSize)
 		else:
-			print "WARNING: The number of available taxonomic \
+			logging.warning("The number of available taxonomic \
 				matches is smaller than subSampleSize.  \
-				Ignoring pairwiseSampleSize."
+				Ignoring pairwiseSampleSize.")
 	else:
-		# TODO: Same as above. Nothign to compute if this pairwiseSampleSize <= 0
+		emptySampleError("subSampleSize")
+		os.exit()
 
-	cleanedAligns = [str(x.seq) for x in subSampledAligns]
-	# TODO: use DEBUG to print
-	print "Computing distance."
-	return computePairwiseDistStats(cleanedAligns, distFn)
+	otuSamples = [str(x.seq) for x in aligns]
+	pairwiseSubSamples = [str(x.seq) for x in subSampledAligns]
+
+	logging.info("Computing distance...")
+	pairwiseData = computePairwiseDistStats(pairwiseSubSamples, distFn)
+	otuDist = computeDist(otuSamples, distFn)
+
+	logging.debug("Pairwise Data:\n")
+	for key in pairwiseData.keys():
+		logging.debug("%s: %f\n" % (key, pairwiseData[key]))
+	logging.debug("OTU distance: %f\n" % otuDist)
+	return(tax, otuDist, pairwiseData["min"], pairwiseData["max"], 
+		pairwiseData["avg"])
 
 '''===Notes===
  Directory should look like
@@ -256,21 +275,21 @@ def computeAlnDistance (t, s, tax, upToLvl, refDB, distFn, maxPoolSize, \
  #	-Unique_taxonomy.lines
  #	-seq_lin.mapping
  #	-bold_coi_11_05_2015.fasta
+
+
+"Loading Tree..."
+t=loadTree("data/Unique_taxonomy.lines")
+"Loading Sequences..."
+s=loadSequences("data/seq_lin.mapping")
+"Loading BOLD..."
+dbFile="data/bold_coi_11_05_2015.fasta"
+
+refDB = indexFasta(dbFile)
+distFn="OUTTER_GAP_CONSERVED"
+
+tax="Animalia;Arthropoda;Remipedia;Nectiopoda"
+upToLvl=8
+
+"Running query for %s Lvl=%s"  % (tax, upToLvl)
+print(computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, "tmp", 15, 10))
 '''
-
-# print "Loading Tree..."
-# t=loadTree("data/Unique_taxonomy.lines")
-# print "Loading Sequences..."
-# s=loadSequences("data/seq_lin.mapping")
-# print "Loading BOLD..."
-# dbFile="data/bold_coi_11_05_2015.fasta"
-
-# refDB = indexFasta(dbFile)
-# distFn="OUTTER_GAP_CONSERVED"
-
-# tax="Animalia;Arthropoda;Remipedia;Nectiopoda"
-# upToLvl=8
-
-# print "Running query for %s Lvl=%s"  % ( tax, upToLvl)
-
-# print  computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, 15, 10)
