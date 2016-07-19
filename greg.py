@@ -1,6 +1,6 @@
 from Bio import SeqIO, AlignIO
-from Bio.Align.Applications import ClustalwCommandline
-from generateTree import loadTree, loadSequences, getSequencesOf
+from Bio.Align.Applications import ClustalwCommandline, MuscleCommandline
+from generateTree import loadTree, loadSequences, getSequencesOf, getLineagesOf
 from itertools import chain, izip, combinations
 
 import logging
@@ -76,6 +76,21 @@ def randomSubSample(pool, n):
 	return random.sample(pool, n)
 
 
+def muscleAlign(fastaFile):
+	'''Takes in fasta file, cals muscle for multi-sequence alignmnet, 
+		and outputs "{fastFile}.aln".
+
+	 	fastaFile: 	"" The Filepath to the fastafile to align.
+	 
+	 	return 		"" The Filepath of the resulting alignment 
+					file (fasta format).
+	'''
+
+	with open(os.devnull, 'w') as fnull:
+		cline = MuscleCommandline(input=fastaFile, out='%s.aln' % fastaFile, clwstrict=True,)
+		cline(stderr=fnull, stdout=fnull)
+	return "%s.aln" % fastaFile
+
 
 def clustalAlign(fastaFile):
 	'''Takes in fasta file, cals clustalW for multi-sequence alignmnet, 
@@ -91,7 +106,7 @@ def clustalAlign(fastaFile):
 		clustalWCmd = ['clustalw', '-ALIGN','-INFILE=%s' % fastaFile,
 				'-OUTFILE=%s.aln' % fastaFile,
 				'-OUTORDER=INPUT']
-		subprocess.call(clustalWCmd, stderr=fnull, stdout=fnull)
+		subprocess.call(str(clustalWCmd), stderr=fnull, stdout=fnull)
 	return "%s.aln" % fastaFile
 
 
@@ -236,7 +251,7 @@ def computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, outDir="tmp",
 	SeqIO.write(descendants, open(hitsFastaFilePath, 'w'), "fasta")
 
 	# align seqs
-	alignFile = clustalAlign(hitsFastaFilePath)
+	alignFile = muscleAlign(hitsFastaFilePath)
 	aligns = [x for x in parseAln(alignFile)]
 
 	# subsample for pairwise alignments
@@ -266,6 +281,31 @@ def computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, outDir="tmp",
 	return(tax, otuDist, pairwiseData["min"], pairwiseData["max"], 
 		pairwiseData["avg"])
 
+def computeAlnDistAcrossTree(t, maxLvl, minLvl=1):
+	total_count=0
+	curr_count=0
+	for key in t.keys():
+		lineages = []
+		currentLvl = maxLvl
+		while currentLvl >= minLvl: 
+			print("============================")
+			print("========= Level: %d =========" % (currentLvl) )
+			print("============================")
+			if currentLvl == 1:
+				lineages = [key]
+			else:
+				lineages = getLineagesOf(t, key, currentLvl)
+			i = 1
+			for tax in lineages:
+				print("%s\t%d/%d\t%d/%d" % \
+					(tax, i, len(lineages),
+					curr_count, total_count))
+				i = i + 1
+				curr_count = curr_count+1
+			
+			currentLvl = currentLvl - 1
+
+	
 '''===Notes===
  Directory should look like
  #-/
@@ -276,7 +316,7 @@ def computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, outDir="tmp",
  #	-seq_lin.mapping
  #	-bold_coi_11_05_2015.fasta
 
-
+'''
 "Loading Tree..."
 t=loadTree("data/Unique_taxonomy.lines")
 "Loading Sequences..."
@@ -288,8 +328,9 @@ refDB = indexFasta(dbFile)
 distFn="OUTTER_GAP_CONSERVED"
 
 tax="Animalia;Arthropoda;Remipedia;Nectiopoda"
+tax="Fungi;Basidiomycota;Agaricomycetes;Boletales"
 upToLvl=8
 
 "Running query for %s Lvl=%s"  % (tax, upToLvl)
 print(computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, "tmp", 15, 10))
-'''
+

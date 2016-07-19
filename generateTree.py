@@ -38,20 +38,28 @@ def getSubTree (t, tax):
 lineages = []
 
 def getLineagesOf(t, tax, upToLvl=8):
-    global sequenceIds
-    lineages=[]
-    def getChildren(t, tax, upToLvl=8):
-        global sequenceIds
-        if tax[-1] == ";":
-            tax = tax[:-1]
-        for child in getSubTree(t, tax).keys():
-            getChildren(t, tax+";"+child, upToLvl)
+	'''Lists the children OTU of tax, of depth/length upToLvl.
 
-            if len((tax+";"+child).split(";")) ==  upToLvl:
-                #print tax+";"+child, len((tax+";"+child).split(";"))
-                lineages.append((tax+";"+child).replace("Unknown", ""))
-    getChildren(t, tax, upToLvl)
-    return lineages
+		t	{} Tree Dictionary
+		tax	"" Taxonomic name delimited by semicolons.	
+		upToLvl # the classification level of the returned items.
+
+		return	List of OTUs of depth upToLvl.
+	'''
+	global sequenceIds
+	lineages=[]
+	def getChildren(t, tax, upToLvl=8):
+		global sequenceIds
+		if tax[-1] == ";":
+		    tax = tax[:-1]
+		for child in getSubTree(t, tax).keys():
+		    getChildren(t, tax+";"+child, upToLvl)
+
+		    if len((tax+";"+child).split(";")) ==  upToLvl:
+		        #print tax+";"+child, len((tax+";"+child).split(";"))
+		        lineages.append((tax+";"+child).replace("Unknown", ""))
+	getChildren(t, tax, upToLvl)
+	return lineages
 
 sequenceIds = []
 ## getChildrenOf(t, lineageToSequences, "Animalia;Arthropoda;Remipedia;Nectiopoda", 8)
