@@ -1,6 +1,6 @@
 from Bio import SeqIO, AlignIO
-from Bio.Align.Applications import ClustalwCommandline, MuscleCommandline
 from generateTree import loadTree, loadSequences, getSequencesOf, getLineagesOf
+from helpers import *
 from itertools import chain, izip, combinations
 
 import logging
@@ -11,103 +11,6 @@ import re
 import subprocess
 import sys
 
-def ensureDirExists(dirPath):
-	'''Ensures that a relative directory specified by dirPath exists,\
-		by creating it if necessary.
-
-		dirPath "" Relative path to a directory to ensure.
-	'''
-	# check if temp directorty exists, and create it if not
-	tempDir = "temp"
-	if not os.path.isdir(tempDir):
-		os.mkdir(tempDir)
-
-def parseAln (filePath, alnType="clustal"):
-	'''Parses a clustalW .aln file and returns the SeqIO iterator.
-
-	 	filePath  	"" Filepath to .aln file.
-
-	 	return	  	"" A SeqIO iterator.
-	'''
-	records = SeqIO.parse(open(filePath, "rU"), alnType)
-	return records
-
-
-def indexFasta (filePath, nameFn=lambda x : x.split('|')[0]):
-	'''Indexes a fasta file by id, returning a SeqIO index dictionary.
-
-	 	filePath: 	"" Filepath to fasta file.
-
-	 	return 		{SeqIO} A SeqIO index object (non iterable).
-	'''
-	records = SeqIO.index(filePath, "fasta", key_function=nameFn)
-	return records
-
-
-def searchFastaByID (refDB, targetIDs):
-	'''Pulls a list of targetsIDs from a SeqIO index dictionary. 
-
-	 	refDB:  	{seqId: SeqRecord, } SeqIO index object result  
-					of indexFasta().
-	 	targetIDs: 	["", ] list of IDs to pull.
-
-	 	return	 	[SeqIO.records, ] record.id and record.seq.
-	'''
-	records = []
-	for record in targetIDs:
-		# Find the sequence if it exists
-		try:
-			records.append(refDB[record])
-		# Don't care if its not in the DataBase	
-		except:
-			pass
-	return records
-
-
-
-def randomSubSample(pool, n):
-	'''Randomly subsamples a list without replacement.
-
-	 	n:	# The max number of samples to take.
-	 	pool:	[] The pool to take from.
-	 
-	 	return		A list of up to n items from pool.
-	'''
-	return random.sample(pool, n)
-
-
-def muscleAlign(fastaFile):
-	'''Takes in fasta file, cals muscle for multi-sequence alignmnet, 
-		and outputs "{fastFile}.aln".
-
-	 	fastaFile: 	"" The Filepath to the fastafile to align.
-	 
-	 	return 		"" The Filepath of the resulting alignment 
-					file (fasta format).
-	'''
-
-	with open(os.devnull, 'w') as fnull:
-		cline = MuscleCommandline(input=fastaFile, out='%s.aln' % fastaFile, clwstrict=True,)
-		cline(stderr=fnull, stdout=fnull)
-	return "%s.aln" % fastaFile
-
-
-def clustalAlign(fastaFile):
-	'''Takes in fasta file, cals clustalW for multi-sequence alignmnet, 
-		and outputs "{fastFile}.aln".
-
-	 	fastaFile: 	"" The Filepath to the fastafile to align.
-	 
-	 	return 		"" The Filepath of the resulting alignment 
-					file (clustW's .aln format).
-	'''
-
-	with open(os.devnull, 'w') as fnull:
-		clustalWCmd = ['clustalw', '-ALIGN','-INFILE=%s' % fastaFile,
-				'-OUTFILE=%s.aln' % fastaFile,
-				'-OUTORDER=INPUT']
-		subprocess.call(str(clustalWCmd), stderr=fnull, stdout=fnull)
-	return "%s.aln" % fastaFile
 
 
 def replaceInnerGap(line):
@@ -223,89 +126,71 @@ def computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, outDir="tmp",
 	 	returns		#.## Percentage diversity between sequences 
 					at a given taxanomic level
 	'''
-	# The temp directory to write to
-	tempDir = "temp"
-	ensureDirExists(tempDir)
+	# poolSize must be positive or this is all pointless
+	if maxPoolSize < 2:
+		emptySampleError("maxPoolSize")
+		os.exit()
+	# same goes for pairwiseSampleSize
+	if pairwiseSampleSize < 2:
+		emptySampleError("subSampleSize")
+		os.exit()
 
 	# A safe file name delimiter to use as a replacement for unsafe delims.
 	fileNameDelim = "_"
-
-	hitsFastaFilePath = "%s/%s.fasta" % (tempDir, 
+	# The directory to write to
+	ensureDirExists(outDir)
+	hitsFastaFilePath = "%s/%s.fasta" % (outDir, 
 						tax.replace(';',fileNameDelim))
+	
 	child_seqs = chain.from_iterable(getSequencesOf(t, s, tax, upToLvl))
 	logging.info("Fetching sequences from database...")
 	descendants = list(searchFastaByID(refDB, child_seqs))
-	if maxPoolSize > 0:
-		if maxPoolSize < len(descendants):
-			descendants = randomSubSample(descendants, 
-							maxPoolSize)
-		else:
-			logging.warning(": The number of available taxonomic\
-				matches is smaller than maxPoolSize.  \
-				Ignoring maxPoolSize.")
-	else:
-		emptySampleError("maxPoolSize")
-		sys.exit()
+
+	if len(descendants) < 2:
+		logging.warning("Ignoring an empty/singleton lineage: %s." % 
+									tax)
+		return(tax,-1,-1,-1,-1)
+	
+	if maxPoolSize > len(descendants):
+		logging.warning("The number of available taxonomic\
+			matches is smaller than maxPoolSize.  \
+			Ignoring maxPoolSize.")
+
+	samplePool = randomSubSample(descendants, maxPoolSize)
+
 	# publish matching seqs
 	logging.info("Writing results to %s ..." % hitsFastaFilePath)
-	SeqIO.write(descendants, open(hitsFastaFilePath, 'w'), "fasta")
+	SeqIO.write(samplePool, open(hitsFastaFilePath, 'w'), "fasta")
 
 	# align seqs
 	alignFile = muscleAlign(hitsFastaFilePath)
 	aligns = [x for x in parseAln(alignFile)]
+	print(len(aligns))
+
+	if pairwiseSampleSize > len(aligns):
+		logging.warning("The number of available taxonomic \
+			matches is smaller than subSampleSize.  \
+			Ignoring pairwiseSampleSize.")
 
 	# subsample for pairwise alignments
-	if pairwiseSampleSize > 0:
-		if pairwiseSampleSize <= len(aligns):
-			subSampledAligns = randomSubSample(aligns,
-							pairwiseSampleSize)
-		else:
-			logging.warning("The number of available taxonomic \
-				matches is smaller than subSampleSize.  \
-				Ignoring pairwiseSampleSize.")
-	else:
-		emptySampleError("subSampleSize")
-		os.exit()
+	subSampledAligns = randomSubSample(aligns, pairwiseSampleSize)
 
+	# convert both pairwise subsample and multiseq iterators to lists
 	otuSamples = [str(x.seq) for x in aligns]
 	pairwiseSubSamples = [str(x.seq) for x in subSampledAligns]
 
-	logging.info("Computing distance...")
-	pairwiseData = computePairwiseDistStats(pairwiseSubSamples, distFn)
+	pairwiseDist = computePairwiseDistStats(pairwiseSubSamples, distFn)
 	otuDist = computeDist(otuSamples, distFn)
 
 	logging.debug("Pairwise Data:\n")
-	for key in pairwiseData.keys():
-		logging.debug("%s: %f\n" % (key, pairwiseData[key]))
+	for key in pairwiseDist.keys():
+		logging.debug("%s: %f\n" % (key, pairwiseDist[key]))
 	logging.debug("OTU distance: %f\n" % otuDist)
-	return(tax, otuDist, pairwiseData["min"], pairwiseData["max"], 
-		pairwiseData["avg"])
+	return(tax, otuDist, pairwiseDist["min"], pairwiseDist["max"], 
+		pairwiseDist["avg"])
 
-def computeAlnDistAcrossTree(t, maxLvl, minLvl=1):
-	total_count=0
-	curr_count=0
-	for key in t.keys():
-		lineages = []
-		currentLvl = maxLvl
-		while currentLvl >= minLvl: 
-			print("============================")
-			print("========= Level: %d =========" % (currentLvl) )
-			print("============================")
-			if currentLvl == 1:
-				lineages = [key]
-			else:
-				lineages = getLineagesOf(t, key, currentLvl)
-			i = 1
-			for tax in lineages:
-				print("%s\t%d/%d\t%d/%d" % \
-					(tax, i, len(lineages),
-					curr_count, total_count))
-				i = i + 1
-				curr_count = curr_count+1
-			
-			currentLvl = currentLvl - 1
 
-	
+
 '''===Notes===
  Directory should look like
  #-/
@@ -316,7 +201,8 @@ def computeAlnDistAcrossTree(t, maxLvl, minLvl=1):
  #	-seq_lin.mapping
  #	-bold_coi_11_05_2015.fasta
 
-'''
+
+
 "Loading Tree..."
 t=loadTree("data/Unique_taxonomy.lines")
 "Loading Sequences..."
@@ -329,8 +215,9 @@ distFn="OUTTER_GAP_CONSERVED"
 
 tax="Animalia;Arthropoda;Remipedia;Nectiopoda"
 tax="Fungi;Basidiomycota;Agaricomycetes;Boletales"
+tax="Protista;Heterokontophyta"
 upToLvl=8
-
 "Running query for %s Lvl=%s"  % (tax, upToLvl)
 print(computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, "tmp", 15, 10))
 
+'''
