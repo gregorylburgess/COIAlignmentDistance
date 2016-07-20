@@ -59,6 +59,12 @@ def searchFastaByID (refDB, targetIDs):
 	return records
 
 
+def sanitizeFileName(fileName, replacement):
+	fileName = fileName.replace(' ',replacement)
+	fileName = fileName.replace(';',replacement)
+	fileName = fileName.replace('/',replacement)
+	fileName = fileName.replace('.',replacement)
+	return fileName
 
 def randomSubSample(pool, n):
 	'''Randomly subsamples a list without replacement.

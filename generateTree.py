@@ -19,6 +19,7 @@ def loadSequences(SequencesFileName):
     for line in open(SequencesFileName):
         line = line.rstrip()
         data = line.split("\t")
+        data[1] = ";".join([x if x else "Unknown" for x in data[1].split(";")])
         lineageToSequences[data[1]].append(data[0])
     return lineageToSequences
 
@@ -28,7 +29,7 @@ def add(t, path):
 
 def getSubTree (t, tax):
     myDict = t[tax.split(";")[0]]
-    if tax[-1] == ";":
+    while tax[-1] == ";":
         tax = tax[:-1]
     for taxId in tax.split(";")[1:]:
         myDict =  myDict[taxId]
@@ -38,47 +39,40 @@ def getSubTree (t, tax):
 lineages = []
 
 def getLineagesOf(t, tax, upToLvl=8):
-	'''Lists the children OTU of tax, of depth/length upToLvl.
+    if ";;" in tax:
+        print "I am here----"
+        raise Exception("empty levels, such as ;; are not permitted in a taxonomy")
 
-		t	{} Tree Dictionary
-		tax	"" Taxonomic name delimited by semicolons.	
-		upToLvl # the classification level of the returned items.
-
-		return	List of OTUs of depth upToLvl.
-	'''
-	global sequenceIds
-	lineages=[]
-	def getChildren(t, tax, upToLvl=8):
-		global sequenceIds
-		if tax[-1] == ";":
-		    tax = tax[:-1]
-		for child in getSubTree(t, tax).keys():
-		    getChildren(t, tax+";"+child, upToLvl)
-
-		    if len((tax+";"+child).split(";")) ==  upToLvl:
-		        #print tax+";"+child, len((tax+";"+child).split(";"))
-		        lineages.append((tax+";"+child).replace("Unknown", ""))
-	getChildren(t, tax, upToLvl)
-	return lineages
+    global sequenceIds
+    lineages=[]
+    def getChildren(t, tax, upToLvl=8):
+        global sequenceIds
+        while tax[-1] == ";":
+            tax = tax[:-1]
+        for child in getSubTree(t, tax).keys():
+            getChildren(t, tax+";"+child, upToLvl)
+            if len((tax+";"+child).split(";")) ==  upToLvl:
+                lineages.append((tax+";"+child))
+    getChildren(t, tax, upToLvl)
+    return lineages
 
 sequenceIds = []
-## getChildrenOf(t, lineageToSequences, "Animalia;Arthropoda;Remipedia;Nectiopoda", 8)
 def getSequencesOf(t, lineageToSequences, tax, upToLvl=8):
     global sequenceIds
     sequenceIds=[]
     def getChildren(t, lineageToSequences, tax, upToLvl=8):
-        global sequenceIds
-        if tax[-1] == ";":
+        while tax[-1] == ";":
             tax = tax[:-1]
-        for child in getSubTree(t, tax).keys():
-            getChildren(t, lineageToSequences, tax+";"+child, upToLvl)
-
-            if len((tax+";"+child).split(";")) ==  upToLvl:
-                #print tax+";"+child, len((tax+";"+child).split(";"))
-                sequenceIds.append(lineageToSequences[(tax+";"+child).replace("Unknown", "")])
+        if len(tax.split(";")) ==  upToLvl:
+            #print "Getting seqeuence of %s" % tax
+            sequenceIds.append(lineageToSequences[tax])
+        else:
+            for child in getSubTree(t, tax).keys():
+                getChildren(t, lineageToSequences, tax+";"+child, upToLvl)
 
     getChildren(t, lineageToSequences, tax, upToLvl)
     return sequenceIds
 
 
         
+

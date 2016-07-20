@@ -7,6 +7,8 @@ from multiprocessing import Pool
 
 def compute(t, s, tax, upToLvl, refDB, distFn, outDir, maxPoolSize, 
 		pairwiseSampleSize):
+	
+	print(tax+" "+str(upToLvl))
 	sol = computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, outDir, 
 				maxPoolSize, pairwiseSampleSize)
 	print (sol)
@@ -56,9 +58,10 @@ def computeAlnDistAcrossTree(maxLvl, minLvl=0, poolSize=4):
 			if currentLvl == 1:
 				lineages = [key]
 			else:
+				print(key+" "+str(currentLvl))
 				lineages = getLineagesOf(t, key, currentLvl)
 			for tax in lineages:
-				compute(t, s, tax, 8, refDB, distFn, 
+				compute(t, s, tax, currentLvl, refDB, distFn, 
 					outDir, maxPoolSize, pairwiseSampleSize)
 			#args = [(t, s, tax, 8, refDB, distFn, 
 			#	outDir, maxPoolSize, pairwiseSampleSize) for tax in lineages]

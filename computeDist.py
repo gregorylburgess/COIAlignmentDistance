@@ -139,19 +139,18 @@ def computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, outDir="tmp",
 	fileNameDelim = "_"
 	# The directory to write to
 	ensureDirExists(outDir)
-	hitsFastaFilePath = "%s/%s.fasta" % (outDir, 
-						tax.replace(';',fileNameDelim))
+	hitsFastaFilePath = "%s/%s.fasta" % (outDir, sanitizeFileName(tax, "_"))
 	
 	child_seqs = chain.from_iterable(getSequencesOf(t, s, tax, upToLvl))
 	logging.info("Fetching sequences from database...")
 	descendants = list(searchFastaByID(refDB, child_seqs))
-
-	if len(descendants) < 2:
-		logging.warning("Ignoring an empty/singleton lineage: %s." % 
-									tax)
+	numDescendants = len(descendants)
+	if numDescendants < 2:
+		logging.warning("Ignoring a lineage of size %d: %s." % 
+							(numDescendants, tax))
 		return(tax,-1,-1,-1,-1)
 	
-	if maxPoolSize > len(descendants):
+	if numDescendants < maxPoolSize:
 		logging.warning("The number of available taxonomic\
 			matches is smaller than maxPoolSize.  \
 			Ignoring maxPoolSize.")
@@ -165,7 +164,6 @@ def computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, outDir="tmp",
 	# align seqs
 	alignFile = muscleAlign(hitsFastaFilePath)
 	aligns = [x for x in parseAln(alignFile)]
-	print(len(aligns))
 
 	if pairwiseSampleSize > len(aligns):
 		logging.warning("The number of available taxonomic \
@@ -216,8 +214,9 @@ distFn="OUTTER_GAP_CONSERVED"
 tax="Animalia;Arthropoda;Remipedia;Nectiopoda"
 tax="Fungi;Basidiomycota;Agaricomycetes;Boletales"
 tax="Protista;Heterokontophyta"
+tax="Animalia;Arthropoda;Insecta;Hymenoptera;Eulophidae;Entedoninae;Horismenus;Horismenus opsiphanisDHJ02"
 upToLvl=8
 "Running query for %s Lvl=%s"  % (tax, upToLvl)
 print(computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, "tmp", 15, 10))
-
 '''
+
