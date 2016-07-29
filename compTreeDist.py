@@ -136,6 +136,6 @@ def alignDescendantsAcrossTree(maxLvl=8, minLvl=0, poolSize=4, outDir="tree"):
 if len(sys.argv) < 4:
     "Usage: (align|dist) #threads outDir"
 if sys.argv[1] == "align":
-    alignDescendantsAcrossTree(8, 0, sys.argv[2], sys.argv[2])
+    alignDescendantsAcrossTree(8, 0, sys.argv[2], sys.argv[3])
 elif sys.argv[1] == "dist":
-    computeAlnDistAcrossTree(8, 0, sys.argv[2], sys.argv[2])
+    computeAlnDistAcrossTree(8, 0, sys.argv[2], sys.argv[3])
