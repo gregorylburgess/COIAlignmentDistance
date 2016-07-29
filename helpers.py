@@ -5,6 +5,14 @@ from Bio.SeqIO import *
 from Bio.Align.Applications import ClustalwCommandline, MuscleCommandline
 from generateTree import loadTree, loadSequences, getSequencesOf, getLineagesOf
 
+def unwrapAndCall(params):
+	"""Wrapper for multiprocessing.Pool.  Calls the first item in params as a function with the remaining items as
+	parameters.
+	:param: params A list of parameters where the first is a funcion to call, and the rest are the parameters to that \
+			function.
+	"""
+	x = tuple(params[1:])
+	params[0](*x)
 
 def ensureDirExists(dirPath):
 	'''Ensures that a relative directory specified by dirPath exists,\
@@ -89,8 +97,7 @@ def muscleAlign(fastaFile):
 	'''
 
 	with open(os.devnull, 'w') as fnull:
-		cline = MuscleCommandline(input=fastaFile, out='%s.aln' % \
-					fastaFile, clwstrict=True)
+		cline = MuscleCommandline(input=fastaFile, out='%s.aln' % fastaFile, clwstrict=True)
 		cline(stderr=fnull, stdout=fnull)
 	return "%s.aln" % fastaFile
 

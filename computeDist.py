@@ -50,6 +50,33 @@ def computeDist_outterGapConserved(aligns):
 	return miss / (miss + float(succ))
 
 
+
+def alignDescendants(t, s, refDB, tax, outDir, upToLvl):
+	"""Finds all descendants (on or below that node) of a given taxa in t, writes their sequences to a fasta file, and \
+		aligns on them.
+	:param t:		A tree from loadTree()
+	:param tax:		A taxonomic label, separated by semicolons e.g. "Animalia;Gnathostomulida"
+	:param outDir:	Directory to write the resulting fasta and alignment file to
+	:return:
+	"""
+	logging.debug("Aligning %s" % tax)
+	hitsFastaFilePath = "%s/%s.fasta" % (outDir, sanitizeFileName(tax, "_"))
+	child_seqs = chain.from_iterable(getSequencesOf(t, s, tax))
+	descendants = list(searchFastaByID(refDB, child_seqs))
+	numDescendants = len(descendants)
+	SeqIO.write(descendants, open(hitsFastaFilePath, 'w'), "fasta")
+	if(numDescendants<2):
+		raise Exception("Cannot align taxa with less than 2 descendants")
+	alignFile = muscleAlign(hitsFastaFilePath)
+	logging.debug("Aligned %s sequencs" % numDescendants)
+
+
+
+
+
+
+
+	"""Generate"""
 def computeDist(aligns, distFn):
 	'''Computes the distance between sequences in a .aln file, using the 
 		distFn specified.
