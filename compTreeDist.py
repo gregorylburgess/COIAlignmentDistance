@@ -14,12 +14,11 @@ def cleanUp(outDir, taxFileName):
             os.remove(fileName)
 
 
-def computeAlnDistAcrossTree(maxLvl=8, minLvl=0, poolSize=4):
+def computeAlnDistAcrossTree(maxLvl=8, minLvl=0, poolSize=4, outDir="tree"):
     treeFile = "data/Unique_taxonomy.lines"
     seqsFile = "data/seq_lin.mapping"
     dbFile = "data/bold_coi_11_05_2015.fasta"
     distFn = "OUTTER_GAP_CONSERVED"
-    outDir = "tree"
     maxPoolSize = 10
     pairwiseSampleSize = 5
     "Loading..."
@@ -78,11 +77,10 @@ def write(x, y):
     print(y)
 
 
-def alignDescendantsAcrossTree(maxLvl=8, minLvl=0, poolSize=4):
+def alignDescendantsAcrossTree(maxLvl=8, minLvl=0, poolSize=4, outDir="tree"):
     treeFile = "data/Unique_taxonomy.lines"
     seqsFile = "data/seq_lin.mapping"
     dbFile = "data/bold_coi_11_05_2015.fasta"
-    outDir = "tree"
     "Loading..."
     t = loadTree(treeFile)
     s = loadSequences(seqsFile)
@@ -135,9 +133,9 @@ def alignDescendantsAcrossTree(maxLvl=8, minLvl=0, poolSize=4):
 
 
 # computeAlnDistAcrossTree(8, 1, poolSize=4)
-if len(sys.argv) < 3:
-    "Usage: (align|dist) #threads"
+if len(sys.argv) < 4:
+    "Usage: (align|dist) #threads outDir"
 if sys.argv[1] == "align":
-    alignDescendantsAcrossTree(8,0,sys.argv[2])
+    alignDescendantsAcrossTree(8, 0, sys.argv[2], sys.argv[2])
 elif sys.argv[1] == "dist":
-    computeAlnDistAcrossTree(8, 0, sys.argv[2])
+    computeAlnDistAcrossTree(8, 0, sys.argv[2], sys.argv[2])
