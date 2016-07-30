@@ -92,7 +92,7 @@ def alignDescendantsAcrossTree(maxLvl=8, minLvl=0, poolSize=4, outDir="tree"):
     err.write("")
     err.close()
     err = open("%s/ERRORS.txt" % (outDir), 'a')
-    "Starting..."
+    print "Starting with %d threads..."%poolSize
     out = open("%s/rslt.txt" % outDir, 'w')
     try:
         for key in t.keys():
@@ -103,18 +103,18 @@ def alignDescendantsAcrossTree(maxLvl=8, minLvl=0, poolSize=4, outDir="tree"):
                 if currentLvl == 1:
                     lineages = [key]
                 else:
-                    "%s %d" % (key, currentLvl)
+                    print "%s %d" % (key, currentLvl)
                     lineages = getLineagesOf(t, key, currentLvl)
-                for tax in lineages:
-                    print(tax)
-                    out.write("%s\n" % tax)
+
+                outfiles = ["%s/%s.fasta" % (outDir, sanitizeFileName(tax, "_")) for tax in lineages]
+                child_seqs = [chain.from_iterable(getSequencesOf(t, s, tax)) for tax in lineages]
+                descendants = [list(searchFastaByID(refDB, seqs)) for seqs in child_seqs]
                 if poolSize > 1:
                     try:
-                        pool.imap_unordered(unwrapAndCall,
-                                            [(alignDescendants, t, s, refDB, tax, outDir, maxLvl) for x in lineages])
+                        rslt = pool.map(unwrapAndCall, [(alignDescendants, seqs, outfile) for seqs, outfile in zip(descendants, outfiles)])
 
                     except:
-                        err.write("%s\t%s\n" % (tax, sys.exc_info()[0]))
+                        print(sys.exc_info())
                 else:
                     for tax in lineages:
                         try:
@@ -122,20 +122,23 @@ def alignDescendantsAcrossTree(maxLvl=8, minLvl=0, poolSize=4, outDir="tree"):
                             alignDescendants(t, s, refDB, tax, outDir, maxLvl)
                             out.write("%s\n" % tax)
                         except:
-                            err.write("%s\t%s\n" % (tax, sys.exc_info()[0]))
+                            err.write("%s\t%s\n" % (tax, sys.exc_info()))
 
     except KeyboardInterrupt:
         pool.close()
         pool.join()
+        return
+
     "Done!"
     err.close()
     out.close()
+
 
 
 # computeAlnDistAcrossTree(8, 1, poolSize=4)
 if len(sys.argv) < 4:
     "Usage: (align|dist) #threads outDir"
 if sys.argv[1] == "align":
-    alignDescendantsAcrossTree(8, 0, sys.argv[2], sys.argv[3])
+    alignDescendantsAcrossTree(8, 0, int(sys.argv[2]), sys.argv[3])
 elif sys.argv[1] == "dist":
-    computeAlnDistAcrossTree(8, 0, sys.argv[2], sys.argv[3])
+    computeAlnDistAcrossTree(8, 0, int(sys.argv[2]), sys.argv[3])

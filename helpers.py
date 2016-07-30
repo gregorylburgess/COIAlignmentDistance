@@ -11,8 +11,10 @@ def unwrapAndCall(params):
 	:param: params A list of parameters where the first is a funcion to call, and the rest are the parameters to that \
 			function.
 	"""
+
 	x = tuple(params[1:])
 	params[0](*x)
+	return 1
 
 def ensureDirExists(dirPath):
 	'''Ensures that a relative directory specified by dirPath exists,\
