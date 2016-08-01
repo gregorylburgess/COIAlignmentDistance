@@ -123,44 +123,42 @@ def emptySampleError(varName):
     sys.exit()
 
 
-def computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, outDir="tmp",
-                       maxPoolSize=100, pairwiseSampleSize=25):
-    '''Computes the min, max, avg % genetic variance amongst members of a \
-		given sequences.  Primary function.
+def subsampleTaxa(t, s, tax, upToLvl, refDB, distFn, outDir="tmp", maxPoolSize=100, pairwiseSampleSize=50):
+    """Returns a list of sequences belonging to the given taxa.  Length of the returned list is equal to maxPoolSize.
+         t		{{}{}} A tree from loadTree()
+         s		{{}{}} A tree form loadSequences()
+         refDB 		{} A SeqIO fast index.  Result of calling
+                    indexFasta()
+         tax		"a;b;c" A semicolon-delimited taxonomy string
+         upToLvl		# A digit between 1 and 8 indicating depth of
+                    tax
+         distFn		"" Uppercase ID for the dist function to use
+        outDir		"" Name of the local directory to use for file
+                     output.
+        maxPoolSize	# A number indicating the maxmimum size of a
+                     the taxa to multi-seq align.
+         pairwiseSampleSize	# A number indicating the maxmimum
+                        size of a subsample from the
+                        tax pool to pariwise-seq align.
 
-	 	t		{{}{}} A tree from loadTree()
-	 	s		{{}{}} A tree form loadSequences()
-	 	refDB 		{} A SeqIO fast index.  Result of calling 
-					indexFasta()
-	 	tax		"a;b;c" A semicolon-delimited taxonomy string
-	 	upToLvl		# A digit between 1 and 8 indicating depth of 
-					tax
-	 	distFn		"" Uppercase ID for the dist function to use
-		outDir		"" Name of the local directory to use for file
-					 output.	 	
-		maxPoolSize	# A number indicating the maxmimum size of a
-					 the taxa to multi-seq align.
-	 	pairwiseSampleSize	# A number indicating the maxmimum 
-						size of a subsample from the 
-						tax pool to pariwise-seq align.
+         returns		#.## Percentage diversity between sequences
+                    at a given taxanomic level
+    """
 
-	 	returns		#.## Percentage diversity between sequences 
-					at a given taxanomic level
-	'''
     # poolSize must be positive or this is all pointless
     if maxPoolSize < 2:
         emptySampleError("maxPoolSize")
         os.exit()
+
     # same goes for pairwiseSampleSize
     if pairwiseSampleSize < 2:
         emptySampleError("subSampleSize")
         os.exit()
 
-    # A safe file name delimiter to use as a replacement for unsafe delims.
-    fileNameDelim = "_"
+
     # The directory to write to
     ensureDirExists(outDir)
-    hitsFastaFilePath = "%s/%s.fasta" % (outDir, sanitizeFileName(tax, "_"))
+
 
     child_seqs = chain.from_iterable(getSequencesOf(t, s, tax, upToLvl))
     logging.info("Fetching sequences from database...")
@@ -173,41 +171,62 @@ def computeAlnDistance(t, s, tax, upToLvl, refDB, distFn, outDir="tmp",
 
     if numDescendants < maxPoolSize:
         logging.warning("The number of available taxonomic\
-			matches is smaller than maxPoolSize.  \
-			Ignoring maxPoolSize.")
+    			matches is smaller than maxPoolSize.  \
+    			Ignoring maxPoolSize.")
 
     samplePool = randomSubSample(descendants, maxPoolSize)
+    return samplePool
 
-    # publish matching seqs
-    logging.info("Writing results to %s ..." % hitsFastaFilePath)
-    SeqIO.write(samplePool, open(hitsFastaFilePath, 'w'), "fasta")
+def computeAlnDistance(tax, samplePool, distFn, outDir="tmp", maxPoolSize=100, pairwiseSampleSize=25):
+    """Computes the min, max, avg % genetic variance amongst members in a group of sequences..
 
-    # align seqs
-    alignFile = muscleAlign(hitsFastaFilePath)
-    aligns = [x for x in parseAln(alignFile)]
 
-    if pairwiseSampleSize > len(aligns):
-        logging.warning("The number of available taxonomic \
-			matches is smaller than subSampleSize.  \
-			Ignoring pairwiseSampleSize.")
+    :param tax:                 "a;b;c" A semicolon-delimited taxonomy string
+    :param samplePool:          [SeqIO.SeqReord,]
+    :param distFn:              "" Uppercase ID for the dist function to use
+    :param outDir:              "" Name of the local directory to use for file output.
+    :param maxPoolSize:         # A number indicating the maxmimum size of a the taxa to multi-seq align.
+    :param pairwiseSampleSize:  # A number indicating the maxmimum size of a subsample from the tax pool to pariwise-seq
+                                    align.
+    :return:                    (tax, otu (tax, otuDist, pairwiseDist["min"], pairwiseDist["max"],
+                pairwiseDist["avg"])
+    """
+    try:
+        # A safe file name delimiter to use as a replacement for unsafe delims.
+        fileNameDelim = "_"
+        hitsFastaFilePath = "%s/%s.fasta" % (outDir, sanitizeFileName(tax, "_"))
 
-    # subsample for pairwise alignments
-    subSampledAligns = randomSubSample(aligns, pairwiseSampleSize)
+        # publish matching seqs
+        logging.info("Writing results to %s ..." % hitsFastaFilePath)
+        SeqIO.write(samplePool, open(hitsFastaFilePath, 'w'), "fasta")
 
-    # convert both pairwise subsample and multiseq iterators to lists
-    otuSamples = [str(x.seq) for x in aligns]
-    pairwiseSubSamples = [str(x.seq) for x in subSampledAligns]
+        # align seqs
+        alignFile = muscleAlign(hitsFastaFilePath)
+        aligns = [x for x in parseAln(alignFile)]
 
-    pairwiseDist = computePairwiseDistStats(pairwiseSubSamples, distFn)
-    otuDist = computeDist(otuSamples, distFn)
+        if pairwiseSampleSize > len(aligns):
+            logging.warning("The number of available taxonomic \
+                matches is smaller than subSampleSize.  \
+                Ignoring pairwiseSampleSize.")
 
-    logging.debug("Pairwise Data:\n")
-    for key in pairwiseDist.keys():
-        logging.debug("%s: %f\n" % (key, pairwiseDist[key]))
-    logging.debug("OTU distance: %f\n" % otuDist)
-    return (tax, otuDist, pairwiseDist["min"], pairwiseDist["max"],
-            pairwiseDist["avg"])
+        # subsample for pairwise alignments
+        subSampledAligns = randomSubSample(aligns, pairwiseSampleSize)
 
+        # convert both pairwise subsample and multiseq iterators to lists
+        otuSamples = [str(x.seq) for x in aligns]
+        pairwiseSubSamples = [str(x.seq) for x in subSampledAligns]
+
+        pairwiseDist = computePairwiseDistStats(pairwiseSubSamples, distFn)
+        otuDist = computeDist(otuSamples, distFn)
+
+        logging.debug("Pairwise Data:\n")
+        for key in pairwiseDist.keys():
+            logging.debug("%s: %f\n" % (key, pairwiseDist[key]))
+        logging.debug("OTU distance: %f\n" % otuDist)
+        return (tax, otuDist, pairwiseDist["min"], pairwiseDist["max"],
+                pairwiseDist["avg"])
+    except:
+        return (tax,-1,-1,-1,-1)
 
 '''===Notes===
  Directory should look like

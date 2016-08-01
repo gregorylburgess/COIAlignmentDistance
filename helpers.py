@@ -13,8 +13,8 @@ def unwrapAndCall(params):
 	"""
 
 	x = tuple(params[1:])
-	params[0](*x)
-	return 1
+	return params[0](*x)
+
 
 def ensureDirExists(dirPath):
 	'''Ensures that a relative directory specified by dirPath exists,\
